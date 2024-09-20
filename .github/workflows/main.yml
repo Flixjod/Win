@@ -1,0 +1,55 @@
+name: CI
+
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+
+    runs-on: windows-latest
+    timeout-minutes: 30  # Set a timeout limit to avoid infinite runs
+
+    steps:
+    - name: Download ngrok
+      run: |
+        Write-Host "Downloading ngrok..."
+        Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
+      continue-on-error: true  # Allow continuing on error for logging purposes
+
+    - name: Extract ngrok
+      run: |
+        Write-Host "Extracting ngrok..."
+        Expand-Archive ngrok.zip -DestinationPath .
+      continue-on-error: true
+
+    - name: Authenticate ngrok
+      run: |
+        Write-Host "Authenticating ngrok..."
+        .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
+      env:
+        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+      continue-on-error: true
+
+    - name: Enable Remote Desktop
+      run: |
+        Write-Host "Enabling Remote Desktop..."
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+      continue-on-error: true
+
+    - name: Set runneradmin password
+      run: |
+        Write-Host "Setting user password..."
+        Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
+      continue-on-error: true
+
+    - name: Create Tunnel
+      run: |
+        Write-Host "Creating ngrok tunnel..."
+        .\ngrok\ngrok.exe tcp 3389
+      continue-on-error: true
+
+    - name: Debug Logs
+      run: |
+        Write-Host "Fetching latest event logs..."
+        Get-EventLog -LogName Application -Newest 10  # Fetches recent event logs for debugging
